@@ -1,0 +1,5 @@
+{
+  "layout:main-reels": {
+    "cmd-shift-r": "layout.toggle:reels"
+  }
+}

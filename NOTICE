@@ -1,0 +1,9 @@
+Doomscroll-Driven Development
+Copyright 2026 João Pedro
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+mods/tabs-reels/ is derived from the `tabs` mod shipped with the Herdr app
+(https://herdr.dev), licensed under the Apache License, Version 2.0.
+Changes: adds a "Reels" button that shows/hides the Reels column, and points
+its window-button icons at its own folder. Everything else is Herdr's.
