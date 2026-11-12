@@ -180,10 +180,6 @@
               "resizable": false,
               "radius": 10,
               "background": "background",
-              "border": {
-                "width": 1,
-                "color": "border"
-              },
               "children": [
                 {
                   "id": "reels-bar",
@@ -198,6 +194,16 @@
                 {
                   "id": "reels-view",
                   "type": "block",
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "focus": {
+                    "border": {
+                      "width": 1,
+                      "color": "accent"
+                    }
+                  },
                   "content": {
                     "terminal": "reels"
                   }

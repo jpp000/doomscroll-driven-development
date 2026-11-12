@@ -22,6 +22,7 @@ const file = `${process.env.APP}/keys.json`
 const keys = JSON.parse(fs.readFileSync(file, "utf8"))
 const sec = keys["layout:main-reels"]
 if (sec?.["cmd-shift-r"] === "layout.toggle:reels") delete sec["cmd-shift-r"]
+if (sec?.["cmd-alt-left"] === "reels-bar.left") delete sec["cmd-alt-left"]
 if (sec && !Object.keys(sec).length) delete keys["layout:main-reels"]
 fs.writeFileSync(file, JSON.stringify(keys, null, 2) + "\n")
 NODE

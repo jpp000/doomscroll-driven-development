@@ -13,14 +13,24 @@ button next to Files/Changes shows and hides the column.
   panel, status bar.
 - Tab bar: after Changes, a **Reels** button (icon `mods/reels-bar/reels.svg`, 14px, label
   12px), same style as Files/Changes; `selected` background while the column is shown.
-- Right of the work area, column `reels` (420px, min 320, max 900, radius 10, border
-  `border`, background `background`):
-  - `reels-bar`, 32px, `surface` background, bottom border: "Reels" (semibold), a state
-    (`abrindo…` / `fechado` / `🔒 travado` in `blocked` / `▶ tocando` in `working` /
-    `⏸ pausado` in `dim`), then on the right `▶`/`⏸`, toggles **pausa**, **trava**,
-    **scroll** (`selected` background when on), and `✕`.
-  - `reels-view`, the rest: the `reels` terminal, showing the page at phone width
-    (360–520 CSS px).
+- Right of the work area, column `reels` (420px, min 320, max 900, radius 10, background
+  `background`, no border of its own). Its outline is drawn in two parts that turn `accent`
+  together while the browser has the keyboard, like a focused pane:
+  - `reels-bar`, 32px, `surface` background, top/left/right border (rounded top 10): a
+    7px dot (`working` playing, `blocked` locked, else `dim`), "Reels" (semibold, `accent`
+    when focused), a state (`abrindo…` / `fechado` / `travado` / `tocando` / `pausado`),
+    then on the right 24px icon buttons: play/pause (`icons/play.svg`, `icons/pause.svg`),
+    options (`icons/options.svg`) and close (`mods/pane/close.svg`), each with a tooltip.
+  - Options opens a 340×224 popup (the same mod with `props.menu`): one row per option,
+    title + one-line description + a switch; a row that's on has the `selected` background.
+    "Pausar quando um agente responder" (`reels.auto`), "Só rolar com agente trabalhando"
+    (`reels.lock`), "Próximo reel automático" (`reels.autoscroll`).
+  - `reels-view`, the rest: the `reels` terminal, border `border`, `focus` border `accent`,
+    showing the page at phone width (360–520 CSS px).
+- Pane navigation: `reels-bar` is `focusable`, so Cmd+Opt+Right lands on it and it hands
+  the keyboard to the `reels` terminal. Herdr's `pane.go` refuses to start from a layout
+  terminal block, so `keys.json` binds Cmd+Opt+Left in `layout:main-reels` to
+  `reels-bar.left`: from the browser it focuses the last pane, elsewhere it runs `pane.go left`.
 
 ## How it behaves
 
@@ -66,6 +76,10 @@ button next to Files/Changes shows and hides the column.
 - A wheel tick doesn't beat Instagram's scroll snapping; use `scrollIntoView` for auto scroll.
 - `ended` makes a video paused, so check it before the paused check.
 - The bar only runs while the column has been shown at least once since the layout loaded.
+- `terminal_padding` is only read from the layout root (a value on a block or column is
+  accepted and ignored), so the page keeps the root's 14/12px inset.
+- A node's `focus` border only applies to model panes, not to layout terminal blocks, and
+  a border is all four sides: the line under the bar turns `accent` with the rest.
 - macOS and `/Applications/Google Chrome.app` are assumed.
 
 ## Done when

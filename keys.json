@@ -1,5 +1,6 @@
 {
   "layout:main-reels": {
-    "cmd-shift-r": "layout.toggle:reels"
+    "cmd-shift-r": "layout.toggle:reels",
+    "cmd-alt-left": "reels-bar.left"
   }
 }

@@ -61,28 +61,31 @@ if (!tabs || !body?.children) { console.error("❌ Unexpected main.json shape (n
 tabs.content = { mod: "tabs-reels" }
 body.children.push({
   id: "reels", type: "column", size: { px: 420 }, min: 320, max: 900, resizable: false,
-  radius: 10, background: "background", border: { width: 1, color: "border" },
+  radius: 10, background: "background",
   children: [
     { id: "reels-bar", type: "block", size: { px: 32 }, content: { mod: "reels-bar" } },
-    { id: "reels-view", type: "block", content: { terminal: process.env.ADDR } },
+    { id: "reels-view", type: "block", border: { width: 1, color: "border" },
+      focus: { border: { width: 1, color: "accent" } }, content: { terminal: process.env.ADDR } },
   ],
 })
 const { id, ...rest } = main
 fs.writeFileSync(`${dir}/main-reels.json`, JSON.stringify({ id, cloned_from: { name: "main" }, ...rest }, null, 2) + "\n")
 NODE
 
-# 4. Cmd+Shift+R, only while `main-reels` shows (keeps yours if you bound it).
+# 4. Cmd+Shift+R, and Cmd+Opt+Left to leave the Reels column, only while
+#    `main-reels` shows (keeps yours if you bound them).
 APP="$APP" node <<'NODE'
 const fs = require("fs")
 const file = `${process.env.APP}/keys.json`
 const keys = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}
 const sec = keys["layout:main-reels"] ??= {}
-if (sec["cmd-shift-r"] && sec["cmd-shift-r"] !== "layout.toggle:reels") {
-  console.log("Cmd+Shift+R is already yours in main-reels; left it alone. Use the Reels button.")
-} else {
-  sec["cmd-shift-r"] = "layout.toggle:reels"
-  fs.writeFileSync(file, JSON.stringify(keys, null, 2) + "\n")
+const want = { "cmd-shift-r": "layout.toggle:reels", "cmd-alt-left": "reels-bar.left" }
+let changed = false
+for (const [key, action] of Object.entries(want)) {
+  if (sec[key] && sec[key] !== action) console.log(`${key} is already yours in main-reels; left it alone.`)
+  else if (!sec[key]) { sec[key] = action; changed = true }
 }
+if (changed) fs.writeFileSync(file, JSON.stringify(keys, null, 2) + "\n")
 NODE
 
 # 5. Check and switch.

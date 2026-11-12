@@ -49,7 +49,7 @@ login). Go write some tests.
 - **Adds** two mods: `mods/reels-bar` (the column) and `mods/tabs-reels` (the tab bar with
   the Reels button), plus a **new** layout `main-reels`: your `main` layout + the column.
   Your `main` layout is never edited; `Cmd+Shift+L` switches back.
-- **Adds** Cmd+Shift+R to `keys.json`, only for the `main-reels` layout, and only if you
+- **Adds** Cmd+Shift+R (and Cmd+Opt+Left, to leave the Reels column) to `keys.json`, only for the `main-reels` layout, and only if you
   haven't bound it there already.
 - **Runs** one terminal named `reels` with `bin/reels-term.mjs` (a headless Chrome).
 - **Stores** the browser profile in `~/.local/share/reels-widget` (folder `0700`).

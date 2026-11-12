@@ -3,16 +3,16 @@
 //
 // - Abre o navegador quando a coluna aparece e mantém `main-reels` igual ao
 //   `main` do Herdr + o botão Reels na barra de abas + esta coluna.
-// - ▶/⏸ toca/pausa; ✕ esconde a coluna (e pausa).
+// - ▶/⏸ toca/pausa; ✕ esconde a coluna (e pausa). As opções ficam num menu:
 // - "pausa": pausa quando um agente do Herdr para de trabalhar.
 // - "trava": só deixa rolar enquanto algum agente trabalha.
 // - "scroll": passa para o próximo reel quando o atual termina.
 //
 // Só escreve um arquivo: layouts/main-reels.json. Nunca toca no `main`.
 
-import { View, div } from "gpui-kit";
-import { h_flex } from "gpui-base";
-import { agents, terminals, hc, appHome, home, layout, shared, setShared, notify, run, theme, readTextFile, writeTextFile } from "herdr";
+import { View, div, svg } from "gpui-kit";
+import { h_flex, v_flex } from "gpui-base";
+import { agents, terminals, focused, props, openOverlay, nextCommand, hc, appHome, home, layout, shared, setShared, notify, run, theme, readTextFile, writeTextFile } from "herdr";
 
 const LAYOUT = "main-reels";
 const COLUMN = "reels";
@@ -22,6 +22,14 @@ const CTL = "http://127.0.0.1:9340";
 const KEY = { auto: "reels.auto", lock: "reels.lock", scroll: "reels.autoscroll" };
 const BAR_HEIGHT = 32;
 const SHELLS = ["zsh", "bash", "sh", "fish", "-zsh", "-bash"];
+const ICON = (name) => `mods/reels-bar/icons/${name}.svg`;
+
+// O menu de opções (o mesmo mod, aberto como popup com props.menu).
+const OPTIONS = [
+  { key: "auto", fallback: true, title: "Pausar quando um agente responder", about: "Quando um agente termina ou precisa de você" },
+  { key: "lock", fallback: false, title: "Só rolar com agente trabalhando", about: "Sem agente trabalhando, a rolagem trava" },
+  { key: "scroll", fallback: false, title: "Próximo reel automático", about: "Passa sozinho quando o vídeo acaba" },
+];
 
 const SCRIPT = () => `${appHome()}/mods/reels-bar/bin/reels-term.mjs`;
 
@@ -51,10 +59,12 @@ function buildLayout(main, address, version) {
   tabs.content = { mod: "tabs-reels" };
   body.children.push({
     id: COLUMN, type: "column", size: { px: 420 }, min: 320, max: 900, resizable: false,
-    radius: 10, background: "background", border: { width: 1, color: "border" },
+    radius: 10, background: "background",
+    // A borda é desenhada em duas partes que mudam de cor juntas quando o
+    // navegador tem o foco: o bloco do terminal (focus) e esta barra (render).
     children: [
       { id: "reels-bar", type: "block", size: { px: BAR_HEIGHT }, content: { mod: "reels-bar" } },
-      { id: VIEW, type: "block", content: { terminal: address } },
+      { id: VIEW, type: "block", border: { width: 1, color: "border" }, focus: { border: { width: 1, color: "accent" } }, content: { terminal: address } },
     ],
   });
   const { id, ...rest } = doc;
@@ -63,6 +73,7 @@ function buildLayout(main, address, version) {
 
 export default class ReelsBar extends View {
   init(_props, cx) {
+    if (props()?.menu) return; // o popup de opções só desenha o menu
     this.prev = {};       // status anterior de cada agente
     this.playing = null;  // null = navegador fora do ar
     this.starting = false;
@@ -70,8 +81,23 @@ export default class ReelsBar extends View {
     this.sent = {};       // o que o navegador já sabe: { locked, autoscroll }
     this.misses = 0;
     this.token = null;
+    this.lastPane = null; // o último painel focado, para voltar do Reels
     this.ensure(cx);
     cx.timer.every(2000, (cx) => this.poll(cx));
+    cx.spawn(async (cx) => { for (;;) this.command(await nextCommand()); });
+  }
+
+  // Navegação de painéis (Cmd+Opt+setas). O Herdr não leva `pane.go` para
+  // blocos de terminal do layout, então:
+  // - "focus": o pane.go chegou neste mod (focusable): passa para o vídeo;
+  // - "left" (Cmd+Opt+←, keys.json, só no main-reels): saindo do vídeo,
+  //   volta ao último painel; em qualquer outro lugar, o pane.go normal.
+  command(c) {
+    const address = findNode(layout(), VIEW)?.content?.terminal;
+    const inReels = Boolean(address) && focused()?.terminal === address && !focused()?.pane;
+    if (c === "focus" && address) run("pane.focus", { terminal: address });
+    else if (c === "left" && inReels && this.lastPane) run("pane.focus", { pane: this.lastPane });
+    else if (c === "left" && !inReels) run("pane.go", { direction: "left" });
   }
 
   // Fala com o navegador. O token vem de um arquivo que só você pode ler.
@@ -218,6 +244,8 @@ export default class ReelsBar extends View {
 
   // Roda a cada render (o Herdr redesenha quando agentes ou o layout mudam).
   watch(cx) {
+    const pane = focused()?.pane;
+    if (pane) this.lastPane = pane;
     const finished = [];
     for (const a of agents()) {
       if (this.prev[a.address] === "working" && a.status !== "working") finished.push(a);
@@ -235,48 +263,104 @@ export default class ReelsBar extends View {
     this.sync(cx);
   }
 
-  button(t, id, label, onClick, on = null) {
+  // Botão de ícone, 24×24, como os do cabeçalho dos painéis.
+  button(t, id, icon, tip, onClick) {
     return div()
       .id(id)
-      .px(7)
-      .py(1)
-      .rounded(5)
-      .when(on !== null, (el) => el.bg(on ? t.selected : t.surface))
-      .text_color(on ? t.foreground : on === false ? t.dim : t.muted)
+      .size(24)
+      .flex_none()
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(6)
+      .text_color(t.muted)
       .cursor_pointer()
+      .tooltip(tip)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click(onClick)
-      .child(label);
+      .child(svg(icon).size(14));
+  }
+
+  // O popup: uma linha por opção, com título, explicação e um check.
+  // O popup: uma linha por opção. Ligada: fundo destacado e a chave acesa.
+  menu(t) {
+    const toggle = (on) => h_flex()
+      .w(28).h(16).p(2).flex_none().rounded(8)
+      .when(on, (el) => el.justify_end())
+      .bg(on ? t.accent : t.input)
+      .child(div().size(12).rounded(6).bg(on ? t.accent_foreground : t.muted));
+    return v_flex()
+      .id("reels-options")
+      .size_full()
+      .overflow_y_scrollbar()
+      .p(6)
+      .gap(3)
+      .bg(t.popover)
+      .text_size(12.8)
+      .child(div().px(8).pt(2).pb(3).text_size(11).text_color(t.dim).child("Opções do Reels"))
+      .children(OPTIONS.map((o) => {
+        const on = this.on(o.key, o.fallback);
+        return h_flex()
+          .id(`opt-${o.key}`)
+          .px(10)
+          .py(7)
+          .gap(12)
+          .rounded(8)
+          .items_center()
+          .cursor_pointer()
+          .when(on, (el) => el.bg(t.selected))
+          .hover((el) => el.bg(t.hover))
+          .on_click(() => setShared(KEY[o.key], !on))
+          .child(
+            v_flex().flex_1().min_w(0).gap(2)
+              .child(div().text_color(t.foreground).child(o.title))
+              .child(div().text_size(11.5).text_color(on ? t.muted : t.dim).child(o.about)),
+          )
+          .child(toggle(on));
+      }));
   }
 
   render(cx) {
-    this.watch(cx);
     const t = theme();
+    if (props()?.menu) return this.menu(t);
+    this.watch(cx);
     const off = this.playing === null;
     const locked = this.locked();
-    const state = this.starting ? "abrindo…" : off ? "fechado" : locked ? "🔒 travado" : this.playing ? "▶ tocando" : "⏸ pausado";
-    const flip = (key, fallback) => () => setShared(KEY[key], !this.on(key, fallback));
+    const address = findNode(layout(), VIEW)?.content?.terminal;
+    const active = Boolean(address) && focused()?.terminal === address;
+    const state = this.starting ? "abrindo…" : off ? "fechado" : locked ? "travado" : this.playing ? "tocando" : "pausado";
+    const tone = this.starting || off ? t.dim : locked ? t.blocked : this.playing ? t.working : t.dim;
     return h_flex()
       .size_full()
-      .px(10)
-      .gap(4)
+      .pl(12)
+      .pr(6)
+      .gap(2)
       .items_center()
       .bg(t.surface)
-      .border_b(1)
-      .border_color(t.border)
+      .rounded_t(10)
+      .border_t(1)
+      .border_l(1)
+      .border_r(1)
+      .border_color(active ? t.accent : t.border)
       .text_size(12)
-      .child(div().font_semibold().text_color(t.foreground).child("Reels"))
-      .child(div().truncate().text_color(locked ? t.blocked : this.playing ? t.working : t.dim).child(state))
+      .child(
+        h_flex().gap(7).items_center().min_w(0)
+          .child(div().size(7).flex_none().rounded(4).bg(tone))
+          .child(div().flex_none().font_semibold().text_color(active ? t.accent : t.foreground).child("Reels"))
+          .child(div().truncate().text_color(locked ? t.blocked : t.dim).child(state)),
+      )
       .child(div().flex_1())
-      .when(off && !this.starting, (el) => el.child(this.button(t, "open", "abrir", (_e, cx) => this.ensure(cx))))
+      .when(off && !this.starting, (el) => el.child(
+        div().id("open").h(22).px(8).flex().items_center().rounded(6).text_color(t.muted).cursor_pointer()
+          .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => this.ensure(cx)).child("Abrir"),
+      ))
       .when(!off, (el) =>
-        el.child(this.button(t, "toggle", this.playing ? "⏸" : "▶", (_e, cx) => {
+        el.child(this.button(t, "toggle", ICON(this.playing ? "pause" : "play"), this.playing ? "Pausar" : "Tocar", (_e, cx) => {
           cx.spawn(async (cx) => { await this.ctl("/toggle"); this.poll(cx); });
         })),
       )
-      .child(this.button(t, "auto", "pausa", flip("auto", true), this.on("auto", true)))
-      .child(this.button(t, "lock", "trava", flip("lock", false), this.on("lock")))
-      .child(this.button(t, "scroll", "scroll", flip("scroll", false), this.on("scroll")))
-      .child(this.button(t, "hide", "✕", () => run("layout.hide", { id: COLUMN })));
+      .child(this.button(t, "options", ICON("options"), "Opções", () =>
+        openOverlay({ mod: "reels-bar", kind: "popup", width: 340, height: 224, props: { menu: true } })))
+      .child(this.button(t, "hide", "mods/pane/close.svg", "Esconder (⌘⇧R)", () => run("layout.hide", { id: COLUMN })));
   }
 }
